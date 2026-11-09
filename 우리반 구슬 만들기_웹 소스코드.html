@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>우리가 만드는 학급 기억 구슬</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Jua', sans-serif; background-color: #f0fdf4; user-select: none; }
+        .orb { transition: all 0.5s ease; }
+        .orb.locked { background: #cbd5e1; filter: grayscale(100%); }
+        .orb.unlocked { background: linear-gradient(135deg, #a7f3d0, #34d399); transform: scale(1.1); box-shadow: 0 10px 15px -3px rgba(52, 211, 153, 0.5); }
+        .fade-in { animation: fadeIn 0.5s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .word-btn { transition: transform 0.1s; }
+        .word-btn:active { transform: scale(0.95); }
+    </style>
+</head>
+<body class="min-h-screen text-gray-800">
+
+    <!-- 1. 선생님 설정 화면 -->
+    <div id="setup-screen" class="max-w-2xl mx-auto mt-10 p-8 bg-white rounded-3xl shadow-xl">
+        <h1 class="text-4xl text-green-600 text-center mb-8">✨ 학급 기억 구슬 만들기 (선생님용)</h1>
+        
+        <div class="mb-6 bg-green-50 p-4 rounded-xl">
+            <label class="block text-xl mb-2">1. 우리 반 학생 수 (현재: <span id="student-count-display" class="text-green-600 font-bold">20</span>명)</label>
+            <input type="range" id="student-count" min="1" max="35" value="20" class="w-full h-3 bg-green-200 rounded-lg appearance-none cursor-pointer mb-4" oninput="updateTargetPreview()">
+            
+            <label class="block text-xl mb-2">2. 학생 1인당 목표 문제 수 (현재: <span id="q-per-student-display" class="text-green-600 font-bold">2</span>문제)</label>
+            <input type="range" id="q-per-student" min="1" max="10" value="2" class="w-full h-3 bg-green-200 rounded-lg appearance-none cursor-pointer" oninput="updateTargetPreview()">
+            
+            <p class="text-md text-gray-600 mt-4 font-bold text-center bg-white py-2 rounded-lg">
+                🎯 우리 반 전체 목표: 총 <span id="total-target-display" class="text-blue-500 text-xl">40</span> 문제
+            </p>
+        </div>
+
+        <div class="mb-6">
+            <label class="block text-xl mb-2">3. 오늘 풀이할 수학 난이도 (상세 범위)</label>
+            <select id="math-level" class="w-full p-3 border-2 border-green-300 rounded-xl text-lg font-sans">
+                <optgroup label="기본 연산">
+                    <option value="1">10 이하의 덧셈</option>
+                    <option value="2">10 이하의 뺄셈</option>
+                </optgroup>
+                <optgroup label="가르기와 모으기">
+                    <option value="15">10 가르고 모으기</option>
+                    <option value="16">20 가르고 모으기</option>
+                    <option value="17">50 가르고 모으기</option>
+                </optgroup>
+                <optgroup label="받아올림/내림 연산">
+                    <option value="3" selected>받아올림이 있는 20 이하의 덧셈</option>
+                    <option value="4">받아내림이 있는 20 이하의 뺄셈</option>
+                    <option value="5">받아올림이 있는 1~50 이하의 덧셈</option>
+                    <option value="6">받아내림이 있는 1~50 이하의 뺄셈</option>
+                </optgroup>
+                <optgroup label="확장 연산">
+                    <option value="7">100 이하의 덧셈</option>
+                    <option value="8">100 이하의 뺄셈</option>
+                    <option value="9">200 이하의 덧셈</option>
+                    <option value="10">200 이하의 뺄셈</option>
+                    <option value="11">두 자리 수 덧셈 (혼합)</option>
+                    <option value="12">두 자리 수 뺄셈 (혼합)</option>
+                    <option value="13">세 자리 수 덧셈 (혼합)</option>
+                    <option value="14">세 자리 수 뺄셈 (혼합)</option>
+                </optgroup>
+            </select>
+        </div>
+
+        <div class="mb-8">
+            <label class="block text-xl mb-2">4. 완성할 비밀 문장 (어절 단위로 구슬이 생성됩니다)</label>
+            <input type="text" id="secret-sentence" value="우리 반은 서로 돕는 멋진 1학년" class="w-full p-3 border-2 border-green-300 rounded-xl text-xl">
+        </div>
+
+        <button onclick="startGame()" class="w-full bg-green-500 hover:bg-green-600 text-white text-2xl py-4 rounded-2xl shadow-lg transition-colors">
+            🚀 접속 대기방 열기
+        </button>
+    </div>
+
+    <!-- 1.5 학생 접속 대기방 (로비 화면) - 💡 QR 코드 추가됨! -->
+    <div id="lobby-screen" class="hidden flex-col h-screen fade-in">
+        <div class="bg-green-100 p-6 shadow-md shrink-0 flex flex-col items-center justify-center border-b-4 border-green-200">
+            <h2 class="text-3xl text-green-700 mb-4">📺 교실 앞 TV (대기 중)</h2>
+            <div class="bg-white p-6 rounded-3xl shadow-lg flex items-center justify-center gap-12 w-full max-w-2xl">
+                <!-- QR 코드 영역 -->
+                <div class="flex flex-col items-center">
+                    <p class="text-lg text-gray-500 mb-2 font-bold">1. 카메라로 QR코드 스캔</p>
+                    <div class="p-2 border-4 border-blue-200 rounded-xl">
+                        <img id="qr-code-img" src="" alt="QR Code" class="w-32 h-32">
+                    </div>
+                </div>
+                <!-- 핀 번호 영역 -->
+                <div class="flex flex-col items-center">
+                    <p class="text-lg text-gray-500 mb-2 font-bold">2. 태블릿에 PIN 번호 입력</p>
+                    <p id="display-pin" class="text-7xl font-bold text-blue-600 tracking-[0.2em]">----</p>
+                    <p class="text-sm text-gray-500 animate-pulse mt-2">아이들이 접속하기를 기다리는 중...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-1 bg-gray-50 p-6 flex flex-col items-center justify-center">
+            <h2 class="text-2xl text-blue-500 mb-6 border-b-2 border-blue-200 pb-2">📱 학생 태블릿 (시뮬레이션)</h2>
+            <div class="bg-white p-8 rounded-3xl shadow-md text-center max-w-sm w-full">
+                <h3 class="text-3xl text-gray-800 mb-6">학급 기억 구슬</h3>
+                <input type="text" id="pin-input" placeholder="PIN 번호 4자리" maxlength="4" class="w-full text-center text-4xl p-4 border-4 border-blue-200 rounded-2xl mb-6 focus:border-blue-400 outline-none">
+                <button onclick="joinGame()" class="w-full bg-blue-500 text-white text-2xl py-4 rounded-2xl shadow-md hover:bg-blue-600 transition-colors">입장하기</button>
+                <p id="pin-error" class="text-red-500 text-lg mt-4 hidden">핀 번호를 다시 확인해주세요!</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. 메인 활동 화면 -->
+    <div id="game-screen" class="hidden flex-col h-screen overflow-y-auto pb-10 fade-in">
+        <!-- 교실 앞 TV 화면 -->
+        <div class="bg-green-100 p-6 shadow-md shrink-0">
+            <h2 class="text-3xl text-center text-green-700 mb-4">📺 교실 앞 칠판 (협동 게이지)</h2>
+            <div class="max-w-4xl mx-auto">
+                <div class="flex justify-between mb-2 text-xl font-bold">
+                    <span>우리 반 파워! ⚡</span>
+                    <span id="progress-text">0 / 40</span>
+                </div>
+                <div class="w-full h-8 bg-gray-300 rounded-full overflow-hidden mb-6 shadow-inner">
+                    <div id="progress-bar" class="h-full bg-green-500 transition-all duration-500" style="width: 0%"></div>
+                </div>
+                <div id="orbs-container" class="flex justify-center gap-4 flex-wrap"></div>
+            </div>
+        </div>
+
+        <!-- 학생 개인 패드 화면 -->
+        <div class="flex-1 bg-white p-6 flex flex-col items-center justify-start pt-8">
+            <h2 class="text-2xl text-blue-500 mb-6 border-b-2 border-blue-200 pb-2">📱 학생 태블릿 화면</h2>
+            
+            <div class="text-6xl font-bold mb-4 tracking-widest text-gray-700" id="math-question"></div>
+            
+            <div class="grid grid-cols-3 gap-4 max-w-sm w-full mb-2">
+                <button onclick="inputNumber(1)" class="bg-blue-100 hover:bg-blue-200 text-3xl py-4 rounded-xl shadow word-btn">1</button>
+                <button onclick="inputNumber(2)" class="bg-blue-100 hover:bg-blue-200 text-3xl py-4 rounded-xl shadow word-btn">2</button>
+                <button onclick="inputNumber(3)" class="bg-blue-100 hover:bg-blue-200 text-3xl py-4 rounded-xl shadow word-btn">3</button>
+                <button onclick="inputNumber(4)" class="bg-blue-100 hover:bg-blue-200 text-3xl py-4 rounded-xl shadow word-btn">4</button>
+                <button onclick="inputNumber(5)" class="bg-blue-100 hover:bg-blue-200 text-3xl py-4 rounded-xl shadow word-btn">5</button>
+                <button onclick="inputNumber(6)" class="bg-blue-100 hover:bg-blue-200 text-3xl py-4 rounded-xl shadow word-btn">6</button>
+                <button onclick="inputNumber(7)" class="bg-blue-100 hover:bg-blue-200 text-3xl py-4 rounded-xl shadow word-btn">7</button>
+                <button onclick="inputNumber(8)" class="bg-blue-100 hover:bg-blue-200 text-3xl py-4 rounded-xl shadow word-btn">8</button>
+                <button onclick="inputNumber(9)" class="bg-blue-100 hover:bg-blue-200 text-3xl py-4 rounded-xl shadow word-btn">9</button>
+                <button onclick="clearInput()" class="bg-red-100 hover:bg-red-200 text-2xl py-4 rounded-xl shadow word-btn text-red-600">지우기</button>
+                <button onclick="inputNumber(0)" class="bg-blue-100 hover:bg-blue-200 text-3xl py-4 rounded-xl shadow word-btn">0</button>
+                <button onclick="checkAnswer()" class="bg-blue-500 hover:bg-blue-600 text-white text-2xl py-4 rounded-xl shadow word-btn">확인</button>
+            </div>
+            
+            <div id="student-answer" class="text-4xl text-blue-600 font-bold mt-2 h-10"></div>
+            <div id="feedback-msg" class="text-xl h-6 font-bold"></div>
+            
+            <!-- 오답 힌트 영역 -->
+            <div id="hint-area" class="w-full max-w-sm mt-2 empty:hidden"></div>
+        </div>
+    </div>
+
+    <!-- 3. 문장 조립 화면 -->
+    <div id="assembly-screen" class="hidden flex-col items-center justify-center min-h-screen p-8 fade-in">
+        <h1 class="text-4xl text-green-600 mb-2">🎉 구슬이 모두 모였습니다!</h1>
+        <p class="text-xl text-gray-600 mb-8">순서대로 단어를 눌러 우리 반의 비밀 문장을 완성해 보세요.</p>
+        
+        <div id="selected-words" class="flex flex-wrap gap-4 min-h-[80px] p-4 bg-white rounded-2xl shadow-inner border-2 border-dashed border-gray-300 w-full max-w-4xl mb-8 justify-center items-center text-3xl text-gray-800"></div>
+        <div id="shuffled-words" class="flex flex-wrap gap-4 justify-center max-w-4xl mb-12"></div>
+        
+        <div class="flex gap-4">
+            <button onclick="resetSentence()" class="px-8 py-4 bg-gray-400 hover:bg-gray-500 text-white text-2xl rounded-2xl shadow-lg transition-transform hover:scale-105">
+                🔄 다 지우기
+            </button>
+            <button onclick="checkSentence()" class="px-8 py-4 bg-yellow-400 hover:bg-yellow-500 text-2xl rounded-2xl shadow-lg transition-transform hover:scale-105">
+                정답 확인하기!
+            </button>
+        </div>
+    </div>
+
+    <!-- 4. 결과 및 이어서 하기 화면 -->
+    <div id="end-screen" class="hidden flex-col items-center justify-center min-h-screen p-8 text-center fade-in bg-green-50">
+        <div class="text-8xl mb-6">🎊</div>
+        <h1 class="text-5xl text-green-600 mb-8" id="final-sentence-display"></h1>
+        <p class="text-2xl text-gray-700 mb-12">우리 반 모두가 힘을 합쳐 문장을 완성했어요!</p>
+        
+        <div class="flex gap-6">
+            <button onclick="location.reload()" class="px-8 py-4 bg-blue-500 hover:bg-blue-600 text-white text-2xl rounded-2xl shadow-lg">🔄 다음 문장 도전하기</button>
+            <button onclick="alert('오늘 활동을 멋지게 마쳤습니다!')" class="px-8 py-4 bg-gray-400 hover:bg-gray-500 text-white text-2xl rounded-2xl shadow-lg">🛑 활동 마치기</button>
+        </div>
+    </div>
+
+    <script>
+        let state = {
+            studentCount: 20,
+            qPerStudent: 2,
+            level: 1,
+            sentence: "",
+            words: [],
+            targetScore: 0,
+            currentScore: 0,
+            currentQuestion: { num1: 0, num2: 0, operator: '+', answer: 0 },
+            currentInput: "",
+            selectedWords: [],
+            currentPin: "" 
+        };
+
+        function updateTargetPreview() {
+            const sc = document.getElementById('student-count').value;
+            const qps = document.getElementById('q-per-student').value;
+            document.getElementById('student-count-display').innerText = sc;
+            document.getElementById('q-per-student-display').innerText = qps;
+            document.getElementById('total-target-display').innerText = sc * qps;
+        }
+
+        function startGame() {
+            state.studentCount = parseInt(document.getElementById('student-count').value);
+            state.qPerStudent = parseInt(document.getElementById('q-per-student').value);
+            state.level = parseInt(document.getElementById('math-level').value);
+            state.sentence = document.getElementById('secret-sentence').value.trim();
+            if(!state.sentence) { alert("비밀 문장을 입력해주세요!"); return; }
+
+            state.words = state.sentence.split(/\s+/);
+            state.targetScore = state.studentCount * state.qPerStudent;
+            
+            state.currentPin = Math.floor(1000 + Math.random() * 9000).toString();
+            document.getElementById('display-pin').innerText = state.currentPin;
+            
+            // 💡 [핵심] 현재 웹페이지 주소를 가져와서 동적 QR 코드 이미지 생성 (무료 API 활용)
+            const currentUrl = window.location.href;
+            document.getElementById('qr-code-img').src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(currentUrl)}`;
+            
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('lobby-screen').classList.remove('hidden');
+            document.getElementById('lobby-screen').classList.add('flex');
+        }
+
+        function joinGame() {
+            const pin = document.getElementById('pin-input').value;
+            if(pin === state.currentPin) {
+                document.getElementById('lobby-screen').classList.add('hidden');
+                document.getElementById('lobby-screen').classList.remove('flex');
+                document.getElementById('game-screen').classList.remove('hidden');
+                document.getElementById('game-screen').classList.add('flex');
+                
+                renderOrbs();
+                updateProgress();
+                generateQuestion();
+            } else {
+                document.getElementById('pin-error').classList.remove('hidden');
+            }
+        }
+
+        function renderOrbs() {
+            const container = document.getElementById('orbs-container');
+            container.innerHTML = '';
+            state.words.forEach((word, index) => {
+                container.innerHTML += `
+                    <div id="orb-${index}" class="orb locked w-auto min-w-[80px] px-4 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-md border-4 border-white">
+                        🔒
+                    </div>
+                `;
+            });
+        }
+
+        function generateQuestion() {
+            let n1, n2, op;
+            let valid = false;
+            const level = state.level;
+
+            while(!valid) {
+                switch(level) {
+                    case 1: n1 = Math.floor(Math.random() * 9) + 1; n2 = Math.floor(Math.random() * (10 - n1)) + 1; op = '+'; valid = true; break;
+                    case 2: n1 = Math.floor(Math.random() * 9) + 2; n2 = Math.floor(Math.random() * (n1 - 1)) + 1; op = '-'; valid = true; break;
+                    case 3: n1 = Math.floor(Math.random() * 9) + 1; n2 = Math.floor(Math.random() * 9) + 1; if(n1 + n2 > 10 && n1 + n2 <= 20) { op = '+'; valid = true; } break;
+                    case 4: n1 = Math.floor(Math.random() * 9) + 11; n2 = Math.floor(Math.random() * 9) + 1; if(n1 % 10 < n2) { op = '-'; valid = true; } break;
+                    case 5: n1 = Math.floor(Math.random() * 40) + 1; n2 = Math.floor(Math.random() * 40) + 1; if(n1 + n2 <= 50 && (n1 % 10 + n2 % 10 >= 10)) { op = '+'; valid = true; } break;
+                    case 6: n1 = Math.floor(Math.random() * 39) + 11; n2 = Math.floor(Math.random() * (n1 - 1)) + 1; if(n1 % 10 < n2 % 10) { op = '-'; valid = true; } break;
+                    case 7: n1 = Math.floor(Math.random() * 89) + 10; n2 = Math.floor(Math.random() * (100 - n1)) + 1; op = '+'; valid = true; break;
+                    case 8: n1 = Math.floor(Math.random() * 89) + 11; n2 = Math.floor(Math.random() * (n1 - 1)) + 1; op = '-'; valid = true; break;
+                    case 9: n1 = Math.floor(Math.random() * 189) + 10; n2 = Math.floor(Math.random() * (200 - n1)) + 1; op = '+'; valid = true; break;
+                    case 10: n1 = Math.floor(Math.random() * 189) + 11; n2 = Math.floor(Math.random() * (n1 - 1)) + 1; op = '-'; valid = true; break;
+                    case 11: n1 = Math.floor(Math.random() * 90) + 10; n2 = Math.floor(Math.random() * 90) + 10; op = '+'; valid = true; break;
+                    case 12: n1 = Math.floor(Math.random() * 90) + 10; n2 = Math.floor(Math.random() * 90) + 10; if(n1 > n2) { op = '-'; valid = true; } break;
+                    case 13: n1 = Math.floor(Math.random() * 900) + 100; n2 = Math.floor(Math.random() * 900) + 100; op = '+'; valid = true; break;
+                    case 14: n1 = Math.floor(Math.random() * 900) + 100; n2 = Math.floor(Math.random() * 900) + 100; if(n1 > n2) { op = '-'; valid = true; } break;
+                    case 15: n1 = Math.floor(Math.random() * 9) + 1; if(Math.random() > 0.5) { op = '+'; n2 = 10 - n1; } else { op = '-'; n2 = n1; n1 = 10; } valid = true; break;
+                    case 16: n1 = Math.floor(Math.random() * 19) + 1; if(Math.random() > 0.5) { op = '+'; n2 = 20 - n1; } else { op = '-'; n2 = n1; n1 = 20; } valid = true; break;
+                    case 17: n1 = Math.floor(Math.random() * 49) + 1; if(Math.random() > 0.5) { op = '+'; n2 = 50 - n1; } else { op = '-'; n2 = n1; n1 = 50; } valid = true; break;
+                }
+            }
+
+            state.currentQuestion = { num1: n1, num2: n2, operator: op, answer: op === '+' ? n1 + n2 : n1 - n2 };
+            document.getElementById('math-question').innerText = `${n1} ${op} ${n2} = ?`;
+            document.getElementById('hint-area').innerHTML = ''; 
+            clearInput();
+        }
+
+        function inputNumber(num) {
+            state.currentInput += num;
+            document.getElementById('student-answer').innerText = state.currentInput;
+        }
+
+        function clearInput() {
+            state.currentInput = "";
+            document.getElementById('student-answer').innerText = "";
+        }
+
+        function checkAnswer() {
+            const fb = document.getElementById('feedback-msg');
+            if (parseInt(state.currentInput) === state.currentQuestion.answer) {
+                fb.innerText = "정답! 우리 반 파워 상승! 🎉";
+                fb.className = "text-xl font-bold text-green-500 fade-in";
+                document.getElementById('hint-area').innerHTML = '';
+                state.currentScore++;
+                updateProgress();
+                
+                if (state.currentScore >= state.targetScore) {
+                    setTimeout(showAssemblyScreen, 1000);
+                } else {
+                    setTimeout(() => { fb.innerText = ""; generateQuestion(); }, 1000);
+                }
+            } else {
+                fb.innerText = "다시 한 번 생각해볼까요? 💡";
+                fb.className = "text-xl font-bold text-red-500 fade-in";
+                showSmartHint(state.currentQuestion.num1, state.currentQuestion.num2, state.currentQuestion.operator);
+                setTimeout(clearInput, 1500);
+            }
+        }
+
+        function showSmartHint(n1, n2, op) {
+            const hintDiv = document.getElementById('hint-area');
+            let hintText = "";
+            let visual = "";
+
+            if (op === '+') {
+                if (n1 + n2 <= 10) {
+                    visual = `<span class="tracking-widest">🔴</span>`.repeat(n1) + ` <span class="tracking-widest">🔵</span>`.repeat(n2);
+                    hintText = `<strong>이어세기 해볼까요?</strong><br>${n1} 다음부터 ${n2}번 더 세어보세요!`;
+                } else if (n1 < 10 && n2 < 10 && n1 + n2 > 10) {
+                    let needed = 10 - n1;
+                    let left = n2 - needed;
+                    visual = `
+                        <div class="text-2xl font-bold text-gray-700 bg-white p-2 rounded-xl inline-block border-2 border-gray-200">
+                            ${n1} + <span class="text-blue-500">${n2}</span><br>
+                            <span class="text-gray-300">⬇</span><br>
+                            ${n1} + <span class="text-blue-500">(${needed} 와 ${left})</span>
+                        </div>
+                    `;
+                    hintText = `<strong>10 만들기! (가르기)</strong><br>${n1}이 10이 되려면 ${needed}이 더 필요해요.<br>${n2}을 가르기 해볼까요?`;
+                } else {
+                    hintText = `일의 자리는 일의 자리끼리, 십의 자리는 십의 자리끼리 더해보세요!`;
+                }
+            } else { 
+                if (n1 <= 10) {
+                    visual = `<span class="tracking-widest">🔴</span>`.repeat(n1 - n2) + `<span class="tracking-widest opacity-30">❌</span>`.repeat(n2);
+                    hintText = `<strong>구슬 지우기!</strong><br>${n1}개에서 ${n2}개를 지워보세요!`;
+                } else if (n1 > 10 && n1 < 20 && n2 < 10 && n1 - n2 < 10) {
+                    let ones = n1 % 10; 
+                    let left = n2 - ones; 
+                    visual = `
+                        <div class="text-2xl font-bold text-gray-700 bg-white p-2 rounded-xl inline-block border-2 border-gray-200">
+                            ${n1} - <span class="text-red-500">${n2}</span><br>
+                            <span class="text-gray-300">⬇</span><br>
+                            ${n1} - <span class="text-red-500">(${ones} 와 ${left})</span>
+                        </div>
+                    `;
+                    hintText = `<strong>10 만들기! (빼고 또 빼기)</strong><br>${n1}에서 먼저 ${ones}을 빼서 10을 만들고,<br>남은 ${left}을 더 빼볼까요?`;
+                } else {
+                    hintText = `일의 자리는 일의 자리끼리, 십의 자리는 십의 자리끼리 빼보세요!`;
+                }
+            }
+
+            hintDiv.innerHTML = `
+                <div class="bg-yellow-50 border-2 border-yellow-300 p-3 rounded-2xl shadow-sm fade-in text-center">
+                    <p class="text-md font-bold text-yellow-700 mb-2">선생님의 똑똑한 힌트 💡</p>
+                    <div class="mb-2 flex justify-center items-center">${visual}</div>
+                    <p class="text-md text-gray-700 leading-snug">${hintText}</p>
+                </div>
+            `;
+        }
+
+        function updateProgress() {
+            const percent = Math.min((state.currentScore / state.targetScore) * 100, 100);
+            document.getElementById('progress-bar').style.width = percent + '%';
+            document.getElementById('progress-text').innerText = `${state.currentScore} / ${state.targetScore}`;
+
+            const orbsToOpen = Math.floor((state.currentScore / state.targetScore) * state.words.length);
+            for (let i = 0; i < state.words.length; i++) {
+                const orb = document.getElementById(`orb-${i}`);
+                if (i < orbsToOpen) {
+                    orb.classList.remove('locked');
+                    orb.classList.add('unlocked');
+                    orb.innerText = state.words[i];
+                }
+            }
+        }
+
+        function showAssemblyScreen() {
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('flex');
+            document.getElementById('assembly-screen').classList.remove('hidden');
+            document.getElementById('assembly-screen').classList.add('flex');
+
+            const shuffled = [...state.words].sort(() => Math.random() - 0.5);
+            const container = document.getElementById('shuffled-words');
+            container.innerHTML = '';
+            
+            shuffled.forEach((word) => {
+                container.innerHTML += `
+                    <button onclick="selectWord('${word}', this)" class="px-6 py-3 bg-white border-2 border-green-400 text-green-700 text-2xl rounded-xl shadow hover:bg-green-50 transition-colors word-btn">
+                        ${word}
+                    </button>
+                `;
+            });
+        }
+
+        function selectWord(word, btnElement) {
+            state.selectedWords.push(word);
+            btnElement.style.visibility = 'hidden';
+            renderSelectedWords();
+        }
+
+        function renderSelectedWords() {
+            const container = document.getElementById('selected-words');
+            container.innerHTML = '';
+            state.selectedWords.forEach((word, index) => {
+                container.innerHTML += `
+                    <span class="px-4 py-2 bg-green-100 text-green-800 rounded-lg cursor-pointer hover:bg-red-100 transition-colors" onclick="removeWord(${index})" title="누르면 다시 아래로 돌아가요!">${word}</span>
+                `;
+            });
+        }
+
+        function removeWord(index) {
+            const removed = state.selectedWords.splice(index, 1)[0];
+            const buttons = document.getElementById('shuffled-words').getElementsByTagName('button');
+            for(let btn of buttons) {
+                if(btn.innerText.trim() === removed && btn.style.visibility === 'hidden') {
+                    btn.style.visibility = 'visible';
+                    break;
+                }
+            }
+            renderSelectedWords();
+        }
+
+        function resetSentence() {
+            state.selectedWords = [];
+            const buttons = document.getElementById('shuffled-words').getElementsByTagName('button');
+            for(let btn of buttons) {
+                btn.style.visibility = 'visible';
+            }
+            renderSelectedWords();
+        }
+
+        function checkSentence() {
+            if (state.selectedWords.join(" ") === state.sentence) {
+                document.getElementById('assembly-screen').classList.add('hidden');
+                document.getElementById('assembly-screen').classList.remove('flex');
+                document.getElementById('end-screen').classList.remove('hidden');
+                document.getElementById('end-screen').classList.add('flex');
+                document.getElementById('final-sentence-display').innerText = state.sentence;
+            } else {
+                alert("순서가 조금 틀린 것 같아요! 구슬을 다시 제자리로 돌려놓을게요. 다시 도전해봐요! 💡");
+                resetSentence();
+            }
+        }
+    </script>
+</body>
+</html>
